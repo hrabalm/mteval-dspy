@@ -1,0 +1,34 @@
+[project]
+name = "mteval-dspy"
+version = "0.1.0"
+description = "A small utility for evaluating machine translation using LLMs and leveraging DSPy framework."
+readme = "README.md"
+authors = [
+    { name = "Miroslav Hrabal", email = "mhn@email.cz" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.3.1",
+    "dspy>=3.0.4",
+    "pycountry>=24.6.1",
+]
+
+[project.scripts]
+mteval-dspy = "mteval_dspy:main"
+
+[build-system]
+requires = ["uv_build>=0.9.18,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.1.0",
+    "mt-metrics-eval",
+    "pandas>=2.3.3",
+    "pip>=25.3",
+    "pytest>=9.0.2",
+    "ruff>=0.14.10",
+]
+
+[tool.uv.sources]
+mt-metrics-eval = { git = "https://github.com/google-research/mt-metrics-eval" }
