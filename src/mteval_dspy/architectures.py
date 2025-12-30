@@ -17,6 +17,17 @@ class DA(dspy.Signature):
     src: str = dspy.InputField()
     tgt: str = dspy.InputField()
 
+    score: int = dspy.InputField(desc="Score (0-100), higher is better.")
+
+
+class DAWithTerminology(dspy.Signature):
+    """Assign score to a translation."""
+
+    src_lang: str = dspy.InputField()
+    tgt_lang: str = dspy.InputField()
+    src: str = dspy.InputField()
+    tgt: str = dspy.InputField()
+
     terminology: list[TerminologyEntry] = dspy.InputField(default=[])
 
     score: int = dspy.InputField(desc="Score (0-100), higher is better.")

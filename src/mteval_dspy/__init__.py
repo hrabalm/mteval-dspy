@@ -45,12 +45,12 @@ def cli(model, api_key):
     ),
     help="Objective used during optimization. tRMSE is RMSE linearly transformed into 0-1 range, higher is better. PA is pairwise accuracy.",
 )
-def train():
+def train_da():
     pass
 
 
 @cli.command()
-def predict():
+def predict_da():
     pass
 
 
