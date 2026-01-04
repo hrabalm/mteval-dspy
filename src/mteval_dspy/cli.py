@@ -1,4 +1,20 @@
 import click
+import mteval_dspy.dspy_utils
+import json
+
+
+def parse_optimizer_params(params_str: str) -> dict:
+    try:
+        return json.loads(params_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON for optimizer parameters: {e}")
+
+
+def parse_optimizer_compile_params(params_str: str) -> dict:
+    try:
+        return json.loads(params_str)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON for optimizer compile parameters: {e}")
 
 
 @click.group()
@@ -8,7 +24,14 @@ import click
     type=str,
     envvar="MTEVAL_DSPY_MODEL",
     required=True,
-    help="FIXME",
+    help="Model name",
+)
+@click.option(
+    "--api-base",
+    type=str,
+    envvar="MTEVAL_DSPY_API_BASE",
+    default=None,
+    help="API base URL for the language model.",
 )
 @click.option(
     "--api-key",
@@ -16,37 +39,142 @@ import click
     type=str,
     envvar=["MTEVAL_API_KEY", "OPENAI_API_KEY"],
     default="NIL",
-    help="FIXME",
+    help="API key for authentication",
 )
-def cli(model, api_key):
-    pass
+@click.option(
+    "--max-tokens",
+    type=int,
+    envvar="MTEVAL_DSPY_MAX_TOKENS",
+    default=2048,
+    help="Maximum number of tokens to generate.",
+)
+def cli(model, api_base, api_key, max_tokens):
+    import dspy
+
+    config = mteval_dspy.dspy_utils.DSPyLMConfig(
+        model=model,
+        api_base=api_base,
+        api_key=api_key,
+        max_tokens=max_tokens,
+    )
+    mteval_dspy.dspy_utils.setup_lm(config)
+    dspy.configure_cache(
+        enable_disk_cache=False,
+        enable_memory_cache=True,
+    )
 
 
 @cli.command()
-@click.option("--training-data")
-@click.option("--validation-data")
+@click.option(
+    "--training-data",
+    type=click.Path(exists=True, dir_okay=False),
+    required=True,
+)
+@click.option(
+    "--training-data-max-examples",
+    type=int,
+    default=None,
+    show_default=True,
+)
+@click.option(
+    "--validation-data",
+    type=click.Path(exists=True, dir_okay=False),
+    # Note: not required because of LabeledFewShot optimizer, required for all others
+)
+@click.option(
+    "--validation-data-max-examples",
+    type=int,
+    default=None,
+    show_default=True,
+)
 @click.option(
     "--optimizer",
     type=click.Choice(
         [
             "MIPROv2",
             "SIMBA",
-            "GEPA",
         ]
     ),
+    default="MIPROv2",
+    show_default=True,
+    help="Optimizer to use for training.",
+)
+@click.option(
+    "--optimizer-params",
+    type=str,
+    default="{}",
+    show_default=True,
+    help="Additional optimizer parameters in JSON format.",
+)
+@click.option(
+    "--optimizer-compile-params",
+    type=str,
+    default="{}",
+    show_default=True,
+    help="Additional optimizer compile parameters in JSON format.",
 )
 @click.option(
     "--objective",
     type=click.Choice(
         [
             "tRMSE",
-            "PA",
+            # "PA", # Not yet ported from experimental code
         ]
     ),
+    default="tRMSE",
+    show_default=True,
     help="Objective used during optimization. tRMSE is RMSE linearly transformed into 0-1 range, higher is better. PA is pairwise accuracy.",
 )
-def train_da():
-    pass
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(dir_okay=False),
+    help="Output file to save the trained model.",
+    required=True,
+)
+def train_da(
+    training_data,
+    training_data_max_examples,
+    validation_data,
+    validation_data_max_examples,
+    optimizer,
+    objective,
+    output,
+    optimizer_params,
+    optimizer_compile_params,
+):
+    import mteval_dspy.train as train
+
+    data_config = train.DataConfig(
+        objective=objective,
+        trainset_path=training_data,
+        valset_path=validation_data,
+        trainset_max_examples=training_data_max_examples,
+        valset_max_examples=validation_data_max_examples,
+    )
+    import dspy
+    import mteval_dspy.architectures
+
+    # qe_module = mteval_dspy.architectures.create_module()
+    qe_module = dspy.Predict(signature=mteval_dspy.architectures.DA)
+    optimizer_params_dict = parse_optimizer_params(optimizer_params)
+    optimizer_compile_params_dict = parse_optimizer_compile_params(
+        optimizer_compile_params
+    )
+    training_config = train.TrainingConfig(
+        data_config=data_config,
+        optimizer_params=optimizer_params_dict,
+        optimizer_compile_params=optimizer_compile_params_dict,
+    )
+    match optimizer:
+        case "MIPROv2":
+            qe_module = train.train_mipro(qe_module, training_config)
+        case "SIMBA":
+            qe_module = train.train_simba(qe_module, training_config)
+        case _:
+            raise ValueError(f"Unknown optimizer: {optimizer}")
+
+    qe_module.save(output)
 
 
 @cli.command()

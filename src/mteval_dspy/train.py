@@ -1,20 +1,122 @@
 from pydantic import BaseModel
+from typing import Any
 
 
-class LabeledFewShotConfig(BaseModel):
-    pass
-
-
-class SIMBAConfig(BaseModel):
-    pass
-
-
-class MIPROv2Config(BaseModel):
-    pass
+class DataConfig(BaseModel):
+    objective: str
+    trainset_path: str
+    valset_path: str | None
+    trainset_max_examples: int | None = None
+    valset_max_examples: int | None = None
 
 
 class TrainingConfig(BaseModel):
-    pass
+    data_config: DataConfig
+
+    optimizer_params: dict[str, Any] = {}
+    optimizer_compile_params: dict[str, Any] = {}
+
+
+def load_trainset_valset(
+    objective,
+    trainset_path,
+    valset_path,
+    trainset_max_examples=None,
+    valset_max_examples=None,
+):
+    import mteval_dspy.data as data
+
+    if objective == "tRMSE":
+        trainset = data.load_data_da(trainset_path, max_examples=trainset_max_examples)
+        valset = data.load_data_da(valset_path, max_examples=valset_max_examples)
+    elif objective == "PA":
+        trainset = data.load_data_pairwise_da(
+            trainset_path, max_examples=trainset_max_examples
+        )
+        valset = data.load_data_pairwise_da(
+            valset_path, max_examples=valset_max_examples
+        )
+    else:
+        raise ValueError(f"Unknown objective: {objective}")
+
+    return trainset, valset
+
+
+def preprocess_da_dataset(
+    dataset,
+):
+    import mteval_dspy.data as data
+
+    input_fields = {"src_lang", "tgt_lang", "src", "tgt"}
+
+    dataset = data.set_inputs(
+        dataset,
+        input_fields=input_fields,
+    )
+    return dataset
+
+
+def train_mipro(qe_module, config: TrainingConfig):
+    import dspy
+
+    trainset, valset = load_trainset_valset(
+        objective=config.data_config.objective,
+        trainset_path=config.data_config.trainset_path,
+        valset_path=config.data_config.valset_path,
+        trainset_max_examples=config.data_config.trainset_max_examples,
+        valset_max_examples=config.data_config.valset_max_examples,
+    )
+    trainset = preprocess_da_dataset(
+        trainset,
+    )
+    valset = preprocess_da_dataset(
+        valset,
+    )
+
+    optimizer = dspy.MIPROv2(
+        metric=tRMSE_metric,
+        **config.optimizer_params,
+    )
+
+    optimized_program = optimizer.compile(
+        qe_module,
+        trainset=trainset,
+        valset=valset,
+        requires_permission_to_run=False,
+        **config.optimizer_compile_params,
+    )
+    return optimized_program
+
+
+def train_simba(qe_module, config: TrainingConfig):
+    import dspy
+
+    trainset, valset = load_trainset_valset(
+        objective=config.data_config.objective,
+        trainset_path=config.data_config.trainset_path,
+        valset_path=config.data_config.valset_path,
+        trainset_max_examples=config.data_config.trainset_max_examples,
+        valset_max_examples=config.data_config.valset_max_examples,
+    )
+    trainset = preprocess_da_dataset(
+        trainset,
+    )
+    valset = preprocess_da_dataset(
+        valset,
+    )
+    metric = get_da_metric_from_objective(config.data_config.objective)
+
+    optimizer = dspy.SIMBA(
+        metric=metric,
+        **config.optimizer_params,
+    )
+
+    optimized_program = optimizer.compile(
+        qe_module,
+        trainset=trainset,
+        **config.optimizer_compile_params,
+    )
+    return optimized_program
 
 
 def tRMSE_metric(example, pred, trace=None):
@@ -34,3 +136,16 @@ def pairwise_da_accuracy_metric(example, pred, trace=None):
         return 1.0 if tgt1_score < tgt2_score else 0.0
     else:
         return 1.0 if tgt1_score == tgt2_score else 0.0
+
+
+_da_metrics_by_objective = {
+    "tRMSE": tRMSE_metric,
+    "PA": pairwise_da_accuracy_metric,
+}
+
+
+def get_da_metric_from_objective(objective: str):
+    if objective in _da_metrics_by_objective:
+        return _da_metrics_by_objective[objective]
+    else:
+        raise ValueError(f"Unknown objective: {objective}")

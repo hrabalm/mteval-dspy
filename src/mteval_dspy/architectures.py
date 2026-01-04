@@ -1,5 +1,6 @@
 import dspy
 import pydantic
+import mteval_dspy.dspy_utils
 
 
 class TerminologyEntry(pydantic.BaseModel):
@@ -17,7 +18,7 @@ class DA(dspy.Signature):
     src: str = dspy.InputField()
     tgt: str = dspy.InputField()
 
-    score: int = dspy.InputField(desc="Score (0-100), higher is better.")
+    score: int = dspy.OutputField(desc="Score (0-100), higher is better.")
 
 
 class DAWithTerminology(dspy.Signature):
@@ -30,7 +31,7 @@ class DAWithTerminology(dspy.Signature):
 
     terminology: list[TerminologyEntry] = dspy.InputField(default=[])
 
-    score: int = dspy.InputField(desc="Score (0-100), higher is better.")
+    score: int = dspy.OutputField(desc="Score (0-100), higher is better.")
 
 
 class MR721(dspy.Signature):
@@ -58,4 +59,4 @@ class MQM(dspy.Signature):
 
 
 def create_module() -> dspy.Module:
-    pass
+    return mteval_dspy.dspy_utils.ExtendedModule()
