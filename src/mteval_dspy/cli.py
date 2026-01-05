@@ -165,6 +165,7 @@ def cli(model, api_base, api_key, max_tokens, enable_disk_cache, max_concurrent)
     type=click.Choice(
         [
             "DA",
+            "MR7",
         ]
     ),
     default="DA",
@@ -194,7 +195,7 @@ def train_da(
     )
     import mteval_dspy.architectures
 
-    qe_module = mteval_dspy.architectures.create_module(architecture="DA")
+    qe_module = mteval_dspy.architectures.create_module(architecture=architecture)
     optimizer_params_dict = parse_optimizer_params(optimizer_params)
     optimizer_compile_params_dict = parse_optimizer_compile_params(
         optimizer_compile_params
@@ -221,6 +222,7 @@ def train_da(
     type=click.Choice(
         [
             "DA",
+            "MR7",
         ]
     ),
     default="DA",
