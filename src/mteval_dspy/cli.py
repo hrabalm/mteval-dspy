@@ -48,7 +48,20 @@ def parse_optimizer_compile_params(params_str: str) -> dict:
     default=2048,
     help="Maximum number of tokens to generate.",
 )
-def cli(model, api_base, api_key, max_tokens):
+@click.option(
+    "--enable-disk-cache/--disable-disk-cache",
+    default=False,
+    show_default=True,
+    help="Enable or disable disk caching of model responses.",
+)
+@click.option(
+    "--max-concurrent",
+    type=int,
+    default=100,
+    show_default=True,
+    help="Maximum number of concurrent requests to the language model API.",
+)
+def cli(model, api_base, api_key, max_tokens, enable_disk_cache, max_concurrent):
     import dspy
 
     config = mteval_dspy.dspy_utils.DSPyLMConfig(
@@ -59,8 +72,23 @@ def cli(model, api_base, api_key, max_tokens):
     )
     mteval_dspy.dspy_utils.setup_lm(config)
     dspy.configure_cache(
-        enable_disk_cache=False,
+        enable_disk_cache=enable_disk_cache,
         enable_memory_cache=True,
+    )
+
+    import httpx
+    import litellm
+
+    # https://docs.litellm.ai/docs/providers/openai#set-ssl_verifyfalse
+    litellm.client_session = httpx.Client(
+        verify=False,
+        timeout=6000.0,
+        limits=httpx.Limits(max_connections=max_concurrent),
+    )
+    litellm.aclient_session = httpx.AsyncClient(
+        verify=False,
+        timeout=6000.0,
+        limits=httpx.Limits(max_connections=max_concurrent),
     )
 
 
@@ -132,6 +160,17 @@ def cli(model, api_base, api_key, max_tokens):
     help="Output file to save the trained model.",
     required=True,
 )
+@click.option(
+    "--architecture",
+    type=click.Choice(
+        [
+            "DA",
+        ]
+    ),
+    default="DA",
+    show_default=True,
+    help="Model architecture to use.",
+)
 def train_da(
     training_data,
     training_data_max_examples,
@@ -142,6 +181,7 @@ def train_da(
     output,
     optimizer_params,
     optimizer_compile_params,
+    architecture,
 ):
     import mteval_dspy.train as train
 
@@ -152,11 +192,9 @@ def train_da(
         trainset_max_examples=training_data_max_examples,
         valset_max_examples=validation_data_max_examples,
     )
-    import dspy
     import mteval_dspy.architectures
 
-    # qe_module = mteval_dspy.architectures.create_module()
-    qe_module = dspy.Predict(signature=mteval_dspy.architectures.DA)
+    qe_module = mteval_dspy.architectures.create_module(architecture="DA")
     optimizer_params_dict = parse_optimizer_params(optimizer_params)
     optimizer_compile_params_dict = parse_optimizer_compile_params(
         optimizer_compile_params
@@ -178,5 +216,50 @@ def train_da(
 
 
 @cli.command()
-def predict_da():
-    pass
+@click.option(
+    "--architecture",
+    type=click.Choice(
+        [
+            "DA",
+        ]
+    ),
+    default="DA",
+    show_default=True,
+    help="Model architecture to use.",
+)
+@click.option(
+    "--trained-model",
+    "-m",
+    type=click.Path(exists=True, dir_okay=False),
+)
+@click.argument(
+    "input_file",
+    type=click.Path(exists=True, dir_okay=False, allow_dash=True),
+    default="-",
+)
+def predict_da(
+    input_file,
+    architecture,
+    trained_model,
+):
+    import asyncio
+    import sys
+    import mteval_dspy.architectures
+    import mteval_dspy.predict
+
+    qe_module = mteval_dspy.architectures.create_module(architecture=architecture)
+    if trained_model is not None:
+        qe_module.load(trained_model)
+
+    # Redirect stdout to stderr to avoid mixing with JSON output as DSPy sometimes pollutes it
+    real_stdout = sys.stdout
+    sys.stdout = sys.stderr
+
+    async def main():
+        await mteval_dspy.predict.process_file(
+            qe_module=qe_module,
+            input_file=input_file,
+            outfp=real_stdout,
+        )
+
+    asyncio.run(main())

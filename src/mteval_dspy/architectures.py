@@ -1,6 +1,7 @@
 import dspy
 import pydantic
 import mteval_dspy.dspy_utils
+import warnings
 
 
 class TerminologyEntry(pydantic.BaseModel):
@@ -10,7 +11,7 @@ class TerminologyEntry(pydantic.BaseModel):
     examples: list[str]
 
 
-class DA(dspy.Signature):
+class DirectAssessmentSignature(dspy.Signature):
     """Assign score to a translation."""
 
     src_lang: str = dspy.InputField()
@@ -21,7 +22,7 @@ class DA(dspy.Signature):
     score: int = dspy.OutputField(desc="Score (0-100), higher is better.")
 
 
-class DAWithTerminology(dspy.Signature):
+class DAWithTerminologySignature(dspy.Signature):
     """Assign score to a translation."""
 
     src_lang: str = dspy.InputField()
@@ -32,6 +33,27 @@ class DAWithTerminology(dspy.Signature):
     terminology: list[TerminologyEntry] = dspy.InputField(default=[])
 
     score: int = dspy.OutputField(desc="Score (0-100), higher is better.")
+
+
+class DAPredict(mteval_dspy.dspy_utils.ExtendedModule):
+    def __init__(self, signature: type[dspy.Signature]):
+        self.predict = dspy.Predict(signature=signature)
+
+    def forward(self, *args, **kwargs):
+        try:
+            return self.predict(*args, **kwargs)
+        except Exception as e:
+            warnings.warn(f"Error during prediction: {e}, using fallback score 0.")
+            return dspy.Prediction(score=0)
+
+    async def aforward(self, *args, **kwargs):
+        try:
+            return await self.predict.aforward(*args, **kwargs)
+        except Exception as e:
+            warnings.warn(
+                f"Error during async prediction: {e}, using fallback score 0."
+            )
+            return dspy.Prediction(score=0)
 
 
 class MR721(dspy.Signature):
@@ -58,5 +80,11 @@ class MQM(dspy.Signature):
     ...
 
 
-def create_module() -> dspy.Module:
-    return mteval_dspy.dspy_utils.ExtendedModule()
+architectures = {
+    "DA": lambda: DAPredict(signature=DirectAssessmentSignature),
+}
+
+
+def create_module(architecture: str) -> dspy.Module:
+    assert architecture in architectures, f"Unknown architecture: {architecture}"
+    return architectures[architecture]()
