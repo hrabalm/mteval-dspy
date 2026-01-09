@@ -166,6 +166,8 @@ def cli(model, api_base, api_key, max_tokens, enable_disk_cache, max_concurrent)
         [
             "DA",
             "MR7",
+            "MR7RRWA",
+            "MR7MEAN",
         ]
     ),
     default="DA",
