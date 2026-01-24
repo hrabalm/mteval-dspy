@@ -1467,6 +1467,7 @@ dependencies = [
     { name = "dspy" },
     { name = "pycountry" },
     { name = "python-iso639" },
+    { name = "tenacity" },
 ]
 
 [package.dev-dependencies]
@@ -1485,6 +1486,7 @@ requires-dist = [
     { name = "dspy", specifier = ">=3.0.4" },
     { name = "pycountry", specifier = ">=24.6.1" },
     { name = "python-iso639", specifier = ">=2025.11.16" },
+    { name = "tenacity", specifier = ">=9.1.2" },
 ]
 
 [package.metadata.requires-dev]
