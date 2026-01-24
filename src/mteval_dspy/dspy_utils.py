@@ -95,10 +95,10 @@ class PairwiseDA(ExtendedModule):
         )
 
     async def aforward(self, src_lang, tgt_lang, src, tgt1, tgt2, **kwargs):
-        result1 = self.module.aforward(
+        result1 = self.module.acall(
             src_lang=src_lang, tgt_lang=tgt_lang, src=src, tgt=tgt1, **kwargs
         )
-        result2 = self.module.aforward(
+        result2 = self.module.acall(
             src_lang=src_lang, tgt_lang=tgt_lang, src=src, tgt=tgt2, **kwargs
         )
         return dspy.Prediction(

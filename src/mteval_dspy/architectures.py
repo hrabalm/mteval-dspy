@@ -49,7 +49,7 @@ class DAPredict(mteval_dspy.dspy_utils.ExtendedModule):
 
     async def aforward(self, *args, **kwargs):
         try:
-            return await self.predict.aforward(*args, **kwargs)
+            return await self.predict.acall(*args, **kwargs)
         except Exception as e:
             warnings.warn(
                 f"Error during async prediction: {e}, using fallback score 0."
@@ -163,7 +163,7 @@ class MR7Predict(mteval_dspy.dspy_utils.ExtendedModule):
     async def aforward(self, *args, **kwargs):
         scores = []
         try:
-            prediction = await self.predict_no_chain_of_thought.aforward(
+            prediction = await self.predict_no_chain_of_thought.acall(
                 *args,
                 **kwargs,
             )
@@ -175,7 +175,7 @@ class MR7Predict(mteval_dspy.dspy_utils.ExtendedModule):
         scores.append(prediction.score)
         for idx in range(self.config["num_samples"] - 1):
             try:
-                prediction = await self.predict.aforward(
+                prediction = await self.predict.acall(
                     *args,
                     **kwargs,
                     config={

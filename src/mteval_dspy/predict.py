@@ -1,14 +1,36 @@
 import asyncio
-import click
 import json
+
+import click
+import tenacity
 
 
 async def process_line(qe_module, line):
     data = json.loads(line)
 
-    prediction = await qe_module.aforward(
-        **data,
+    @tenacity.retry(
+        retry=tenacity.retry_if_exception_type(asyncio.TimeoutError),
+        stop=tenacity.stop_after_attempt(5),
+        wait=tenacity.wait_exponential(min=1, max=10) + tenacity.wait_random(0, 2),
     )
+    async def predict_with_retry(**data):
+        return await qe_module.acall(
+            **data,
+        )
+
+    async def predict_with_fallback(**data):
+        try:
+            return await predict_with_retry(**data)
+        except Exception as e:
+            click.echo(
+                f"Warning: Error during prediction: {e}, using fallback score 0.",
+                err=True,
+            )
+            import dspy
+
+            return dspy.Prediction(score=0)
+
+    prediction = await predict_with_fallback(**data)
     output = {
         **data,
         "score": prediction.score,
