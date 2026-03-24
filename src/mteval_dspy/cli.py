@@ -61,14 +61,31 @@ def parse_optimizer_compile_params(params_str: str) -> dict:
     show_default=True,
     help="Maximum number of concurrent requests to the language model API.",
 )
-def cli(model, api_base, api_key, max_tokens, enable_disk_cache, max_concurrent):
+@click.option(
+    "--sampling-params",
+    type=str,
+    default="{}",
+    show_default=True,
+    help='Additional sampling parameters in JSON format, e.g. {"temperature": 0.7, "top_p": 0.9}',
+)
+def cli(
+    model,
+    api_base,
+    api_key,
+    max_tokens,
+    enable_disk_cache,
+    max_concurrent,
+    sampling_params,
+):
     import dspy
 
+    sampling_params = json.loads(sampling_params)
     config = mteval_dspy.dspy_utils.DSPyLMConfig(
         model=model,
         api_base=api_base,
         api_key=api_key,
         max_tokens=max_tokens,
+        lm_extra={**sampling_params},
     )
     mteval_dspy.dspy_utils.setup_lm(config)
     dspy.configure_cache(
