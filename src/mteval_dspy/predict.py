@@ -45,6 +45,7 @@ async def process_file(qe_module, input_file, outfp):
         with click.open_file(input_file, "r") as f:
             for line in f:
                 await queue.put(asyncio.create_task(process_line(qe_module, line)))
+                await asyncio.sleep(1e-6)
         await queue.put(None)  # Sentinel to indicate end of file
 
     async def write_worker():
@@ -55,6 +56,7 @@ async def process_file(qe_module, input_file, outfp):
                     break
                 output = await output_item
                 print(json.dumps(output, ensure_ascii=False), file=outfp)
+                await asyncio.sleep(1e-6)
             finally:
                 queue.task_done()
 
