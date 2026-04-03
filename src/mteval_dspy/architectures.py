@@ -117,6 +117,11 @@ class MR7Predict(mteval_dspy.dspy_utils.ExtendedModule):
     def _aggregate_scores(self, scores: list[int]) -> int:
         scores = [x for x in scores if x is not None]
         scores = [max(0, min(100, s)) for s in scores]
+        if not scores:
+            warnings.warn(
+                "No valid scores available for aggregation; using fallback score 0."
+            )
+            return 0
         if self.config["method"] == "mean":
             return int(sum(scores) / len(scores))
         elif self.config["method"] == "RRWA":
