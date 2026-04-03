@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Any
 
 
@@ -13,8 +13,8 @@ class DataConfig(BaseModel):
 class TrainingConfig(BaseModel):
     data_config: DataConfig
 
-    optimizer_params: dict[str, Any] = {}
-    optimizer_compile_params: dict[str, Any] = {}
+    optimizer_params: dict[str, Any] = Field(default_factory=dict)
+    optimizer_compile_params: dict[str, Any] = Field(default_factory=dict)
 
 
 def load_trainset_valset(

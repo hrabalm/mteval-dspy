@@ -31,7 +31,7 @@ class DAWithTerminologySignature(dspy.Signature):
     src: str = dspy.InputField()
     tgt: str = dspy.InputField()
 
-    terminology: list[TerminologyEntry] = dspy.InputField(default=[])
+    terminology: list[TerminologyEntry] = dspy.InputField(default_factory=list)
 
     score: int = dspy.OutputField(desc="Score (0-100), higher is better.")
 
@@ -224,5 +224,9 @@ architectures = {
 
 
 def create_module(architecture: str) -> dspy.Module:
-    assert architecture in architectures, f"Unknown architecture: {architecture}"
+    if architecture not in architectures:
+        available_architectures = ", ".join(sorted(architectures.keys()))
+        raise ValueError(
+            f"Unknown architecture: {architecture}. Available architectures: {available_architectures}"
+        )
     return architectures[architecture]()
