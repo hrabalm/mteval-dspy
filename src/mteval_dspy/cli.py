@@ -170,12 +170,26 @@ def cli(
     type=click.Choice(
         [
             "tRMSE",
-            # "PA", # Not yet ported from experimental code
+            "PA",
         ]
     ),
     default="tRMSE",
     show_default=True,
     help="Objective used during optimization. tRMSE is RMSE linearly transformed into 0-1 range, higher is better. PA is pairwise accuracy.",
+)
+@click.option(
+    "--pairwise-k-per-source",
+    type=click.IntRange(min=1),
+    default=8,
+    show_default=True,
+    help="For objective=PA, number of random target pairs to sample per source segment.",
+)
+@click.option(
+    "--pairwise-epsilon",
+    type=float,
+    default=0.0,
+    show_default=True,
+    help="For objective=PA, treat gold score differences within epsilon as near-ties and count them as correct.",
 )
 @click.option(
     "--output",
@@ -209,6 +223,8 @@ def train_da(
     optimizer_params,
     optimizer_compile_params,
     architecture,
+    pairwise_k_per_source,
+    pairwise_epsilon,
 ):
     import mteval_dspy.train as train
 
@@ -218,6 +234,7 @@ def train_da(
         valset_path=validation_data,
         trainset_max_examples=training_data_max_examples,
         valset_max_examples=validation_data_max_examples,
+        pairwise_k_per_source=pairwise_k_per_source,
     )
     import mteval_dspy.architectures
 
@@ -230,6 +247,7 @@ def train_da(
         data_config=data_config,
         optimizer_params=optimizer_params_dict,
         optimizer_compile_params=optimizer_compile_params_dict,
+        pairwise_epsilon=pairwise_epsilon,
     )
     match optimizer:
         case "MIPROv2":

@@ -8,6 +8,7 @@ class DataConfig(BaseModel):
     valset_path: str | None
     trainset_max_examples: int | None = None
     valset_max_examples: int | None = None
+    pairwise_k_per_source: int = 8
 
 
 class TrainingConfig(BaseModel):
@@ -15,6 +16,7 @@ class TrainingConfig(BaseModel):
 
     optimizer_params: dict[str, Any] = Field(default_factory=dict)
     optimizer_compile_params: dict[str, Any] = Field(default_factory=dict)
+    pairwise_epsilon: float = 0.0
 
 
 def load_trainset_valset(
@@ -23,18 +25,31 @@ def load_trainset_valset(
     valset_path,
     trainset_max_examples=None,
     valset_max_examples=None,
+    pairwise_k_per_source=8,
 ):
     import mteval_dspy.data as data
 
     if objective == "tRMSE":
         trainset = data.load_data_da(trainset_path, max_examples=trainset_max_examples)
-        valset = data.load_data_da(valset_path, max_examples=valset_max_examples)
+        valset = (
+            data.load_data_da(valset_path, max_examples=valset_max_examples)
+            if valset_path is not None
+            else None
+        )
     elif objective == "PA":
         trainset = data.load_data_pairwise_da(
-            trainset_path, max_examples=trainset_max_examples
+            trainset_path,
+            max_examples=trainset_max_examples,
+            k_per_source=pairwise_k_per_source,
         )
-        valset = data.load_data_pairwise_da(
-            valset_path, max_examples=valset_max_examples
+        valset = (
+            data.load_data_pairwise_da(
+                valset_path,
+                max_examples=valset_max_examples,
+                k_per_source=pairwise_k_per_source,
+            )
+            if valset_path is not None
+            else None
         )
     else:
         raise ValueError(f"Unknown objective: {objective}")
@@ -56,8 +71,40 @@ def preprocess_da_dataset(
     return dataset
 
 
+def preprocess_pairwise_da_dataset(
+    dataset,
+):
+    import mteval_dspy.data as data
+
+    input_fields = {"src_lang", "tgt_lang", "src", "tgt1", "tgt2"}
+
+    dataset = data.set_inputs(
+        dataset,
+        input_fields=input_fields,
+    )
+    return dataset
+
+
+def get_preprocess_function_for_objective(objective: str):
+    if objective == "tRMSE":
+        return preprocess_da_dataset
+    if objective == "PA":
+        return preprocess_pairwise_da_dataset
+    raise ValueError(f"Unknown objective: {objective}")
+
+
 def train_mipro(qe_module, config: TrainingConfig):
     import dspy
+    import mteval_dspy.dspy_utils
+
+    if config.data_config.objective == "PA":
+        qe_module = mteval_dspy.dspy_utils.PairwiseDA(qe_module)
+
+    preprocess_fn = get_preprocess_function_for_objective(config.data_config.objective)
+    metric = get_da_metric_from_objective(
+        config.data_config.objective,
+        pairwise_epsilon=config.pairwise_epsilon,
+    )
 
     trainset, valset = load_trainset_valset(
         objective=config.data_config.objective,
@@ -65,16 +112,15 @@ def train_mipro(qe_module, config: TrainingConfig):
         valset_path=config.data_config.valset_path,
         trainset_max_examples=config.data_config.trainset_max_examples,
         valset_max_examples=config.data_config.valset_max_examples,
+        pairwise_k_per_source=config.data_config.pairwise_k_per_source,
     )
-    trainset = preprocess_da_dataset(
+    trainset = preprocess_fn(
         trainset,
     )
-    valset = preprocess_da_dataset(
-        valset,
-    )
+    valset = preprocess_fn(valset) if valset is not None else None
 
     optimizer = dspy.MIPROv2(
-        metric=tRMSE_metric,
+        metric=metric,
         **config.optimizer_params,
     )
 
@@ -90,6 +136,12 @@ def train_mipro(qe_module, config: TrainingConfig):
 
 def train_simba(qe_module, config: TrainingConfig):
     import dspy
+    import mteval_dspy.dspy_utils
+
+    if config.data_config.objective == "PA":
+        qe_module = mteval_dspy.dspy_utils.PairwiseDA(qe_module)
+
+    preprocess_fn = get_preprocess_function_for_objective(config.data_config.objective)
 
     trainset, valset = load_trainset_valset(
         objective=config.data_config.objective,
@@ -97,14 +149,15 @@ def train_simba(qe_module, config: TrainingConfig):
         valset_path=config.data_config.valset_path,
         trainset_max_examples=config.data_config.trainset_max_examples,
         valset_max_examples=config.data_config.valset_max_examples,
+        pairwise_k_per_source=config.data_config.pairwise_k_per_source,
     )
-    trainset = preprocess_da_dataset(
+    trainset = preprocess_fn(
         trainset,
     )
-    valset = preprocess_da_dataset(
-        valset,
+    metric = get_da_metric_from_objective(
+        config.data_config.objective,
+        pairwise_epsilon=config.pairwise_epsilon,
     )
-    metric = get_da_metric_from_objective(config.data_config.objective)
 
     optimizer = dspy.SIMBA(
         metric=metric,
@@ -125,17 +178,15 @@ def tRMSE_metric(example, pred, trace=None):
     return 1 - ((example.score - pred.score) / 100) ** 2
 
 
-def pairwise_da_accuracy_metric(example, pred, trace=None):
+def pairwise_da_accuracy_metric(example, pred, trace=None, epsilon: float = 0.0):
     """Hard pairwise accuracy for DA scores. Expects that
     higher scores are better."""
-    tgt1_score = pred.tgt1_score
-    tgt2_score = pred.tgt2_score
-    if example.tgt1_score > example.tgt2_score:
-        return 1.0 if tgt1_score > tgt2_score else 0.0
-    elif example.tgt1_score < example.tgt2_score:
-        return 1.0 if tgt1_score < tgt2_score else 0.0
-    else:
-        return 1.0 if tgt1_score == tgt2_score else 0.0
+    gold_delta = example.tgt1_score - example.tgt2_score
+    if abs(gold_delta) <= epsilon:
+        return 1.0
+
+    pred_delta = pred.tgt1_score - pred.tgt2_score
+    return 1.0 if (gold_delta > 0) == (pred_delta > 0) else 0.0
 
 
 _da_metrics_by_objective = {
@@ -144,7 +195,14 @@ _da_metrics_by_objective = {
 }
 
 
-def get_da_metric_from_objective(objective: str):
+def get_da_metric_from_objective(objective: str, pairwise_epsilon: float = 0.0):
+    if objective == "PA":
+        return lambda example, pred, trace=None: pairwise_da_accuracy_metric(
+            example,
+            pred,
+            trace=trace,
+            epsilon=pairwise_epsilon,
+        )
     if objective in _da_metrics_by_objective:
         return _da_metrics_by_objective[objective]
     else:

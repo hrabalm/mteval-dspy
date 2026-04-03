@@ -73,6 +73,9 @@ class PairwiseDA(ExtendedModule):
     """Module for converting DA to pairwise DA. This is useful for optimization/
     training."""
 
+    input_fields: set[str] = {"src_lang", "tgt_lang", "src", "tgt1", "tgt2"}
+    output_fields: set[str] = {"tgt1_score", "tgt2_score"}
+
     def __init__(
         self,
         module: dspy.Module,

@@ -35,6 +35,13 @@ def test_get_da_metric_from_objective_returns_expected_metric():
     assert get_da_metric_from_objective("tRMSE") is tRMSE_metric
 
 
+def test_get_da_metric_from_objective_pa_returns_callable_with_epsilon():
+    metric = get_da_metric_from_objective("PA", pairwise_epsilon=1.0)
+    example = SimpleNamespace(tgt1_score=50.0, tgt2_score=49.2)
+    pred = SimpleNamespace(tgt1_score=1.0, tgt2_score=99.0)
+    assert metric(example, pred) == 1.0
+
+
 def test_get_da_metric_from_objective_raises_for_unknown():
     try:
         get_da_metric_from_objective("UNKNOWN")

@@ -91,3 +91,26 @@ def test_cli_callback_sets_http_verify_false(monkeypatch):
 
     assert _FakeSyncClient.calls[-1]["verify"] is False
     assert _FakeAsyncClient.calls[-1]["verify"] is False
+
+
+def test_train_da_objective_includes_pa():
+    objective_option = next(
+        param for param in cli_module.train_da.params if param.name == "objective"
+    )
+    assert "PA" in objective_option.type.choices
+
+
+def test_train_da_has_pairwise_options():
+    pairwise_k_option = next(
+        param
+        for param in cli_module.train_da.params
+        if param.name == "pairwise_k_per_source"
+    )
+    pairwise_eps_option = next(
+        param
+        for param in cli_module.train_da.params
+        if param.name == "pairwise_epsilon"
+    )
+
+    assert pairwise_k_option.default == 8
+    assert pairwise_eps_option.default == 0.0
