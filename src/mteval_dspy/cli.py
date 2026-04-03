@@ -68,6 +68,12 @@ def parse_optimizer_compile_params(params_str: str) -> dict:
     show_default=True,
     help='Additional sampling parameters in JSON format, e.g. {"temperature": 0.7, "top_p": 0.9}',
 )
+@click.option(
+    "--enable-ssl-verify/--disable-ssl-verify",
+    default=True,
+    show_default=True,
+    help="Enable or disable SSL certificate verification for HTTP clients.",
+)
 def cli(
     model,
     api_base,
@@ -76,6 +82,7 @@ def cli(
     enable_disk_cache,
     max_concurrent,
     sampling_params,
+    enable_ssl_verify,
 ):
     import dspy
 
@@ -98,12 +105,12 @@ def cli(
 
     # https://docs.litellm.ai/docs/providers/openai#set-ssl_verifyfalse
     litellm.client_session = httpx.Client(
-        verify=False,
+        verify=enable_ssl_verify,
         timeout=6000.0,
         limits=httpx.Limits(max_connections=max_concurrent),
     )
     litellm.aclient_session = httpx.AsyncClient(
-        verify=False,
+        verify=enable_ssl_verify,
         timeout=6000.0,
         limits=httpx.Limits(max_connections=max_concurrent),
     )
