@@ -1,5 +1,6 @@
 import sys
 from types import SimpleNamespace
+from pathlib import Path
 
 import mteval_dspy.cli as cli_module
 
@@ -114,3 +115,56 @@ def test_train_da_has_pairwise_options():
 
     assert pairwise_k_option.default == 8
     assert pairwise_eps_option.default == 0.0
+
+
+def test_train_da_has_initial_program_option():
+    initial_program_option = next(
+        param for param in cli_module.train_da.params if param.name == "initial_program"
+    )
+    assert initial_program_option.default is None
+
+
+def test_train_da_loads_initial_program(monkeypatch, tmp_path):
+    import mteval_dspy.architectures as architectures
+    import mteval_dspy.train as train
+
+    class _FakeModule:
+        def __init__(self):
+            self.loaded_paths = []
+            self.saved_paths = []
+
+        def load(self, path):
+            self.loaded_paths.append(path)
+
+        def save(self, path):
+            self.saved_paths.append(path)
+
+    fake_module = _FakeModule()
+    monkeypatch.setattr(
+        architectures, "create_module", lambda architecture: fake_module
+    )
+    monkeypatch.setattr(train, "train_mipro", lambda module, config: module)
+    monkeypatch.setattr(train, "train_simba", lambda module, config: module)
+
+    initial_program = tmp_path / "seed.json"
+    output_path = tmp_path / "out.json"
+    Path(initial_program).write_text("{}", encoding="utf-8")
+
+    cli_module.train_da.callback(
+        training_data="train.jsonl",
+        training_data_max_examples=None,
+        validation_data=None,
+        validation_data_max_examples=None,
+        optimizer="MIPROv2",
+        objective="tRMSE",
+        output=str(output_path),
+        optimizer_params="{}",
+        optimizer_compile_params="{}",
+        architecture="DA",
+        pairwise_k_per_source=8,
+        pairwise_epsilon=0.0,
+        initial_program=str(initial_program),
+    )
+
+    assert fake_module.loaded_paths == [str(initial_program)]
+    assert fake_module.saved_paths == [str(output_path)]

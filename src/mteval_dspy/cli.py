@@ -212,6 +212,12 @@ def cli(
     show_default=True,
     help="Model architecture to use.",
 )
+@click.option(
+    "--initial-program",
+    type=click.Path(exists=True, dir_okay=False),
+    default=None,
+    help="Optional path to a previously optimized program to load before continuing training.",
+)
 def train_da(
     training_data,
     training_data_max_examples,
@@ -225,6 +231,7 @@ def train_da(
     architecture,
     pairwise_k_per_source,
     pairwise_epsilon,
+    initial_program,
 ):
     import mteval_dspy.train as train
 
@@ -239,6 +246,8 @@ def train_da(
     import mteval_dspy.architectures
 
     qe_module = mteval_dspy.architectures.create_module(architecture=architecture)
+    if initial_program is not None:
+        qe_module.load(initial_program)
     optimizer_params_dict = parse_optimizer_params(optimizer_params)
     optimizer_compile_params_dict = parse_optimizer_compile_params(
         optimizer_compile_params
