@@ -233,6 +233,7 @@ def train_da(
     pairwise_epsilon,
     initial_program,
 ):
+    import mteval_dspy.dspy_utils
     import mteval_dspy.train as train
 
     data_config = train.DataConfig(
@@ -266,6 +267,8 @@ def train_da(
         case _:
             raise ValueError(f"Unknown optimizer: {optimizer}")
 
+    if isinstance(qe_module, mteval_dspy.dspy_utils.PairwiseDA):
+        qe_module = qe_module.module
     qe_module.save(output)
 
 
