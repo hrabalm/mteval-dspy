@@ -4,9 +4,20 @@ import json
 import click
 import tenacity
 
+import mteval_dspy.truncation
 
-async def process_line(qe_module, line):
+
+async def process_line(qe_module, line, tokenizer: str, max_segment_tokens: int | None):
     data = json.loads(line)
+
+    if "src" in data:
+        data["src"] = await mteval_dspy.truncation.truncate_segment_async(
+            data["src"], tokenizer, max_segment_tokens
+        )
+    if "tgt" in data:
+        data["tgt"] = await mteval_dspy.truncation.truncate_segment_async(
+            data["tgt"], tokenizer, max_segment_tokens
+        )
 
     @tenacity.retry(
         retry=tenacity.retry_if_exception_type(asyncio.TimeoutError),
@@ -38,13 +49,28 @@ async def process_line(qe_module, line):
     return output
 
 
-async def process_file(qe_module, input_file, outfp):
+async def process_file(
+    qe_module,
+    input_file,
+    outfp,
+    tokenizer: str,
+    max_segment_tokens: int | None,
+):
     queue = asyncio.Queue(maxsize=2_000)
 
     async def producer():
         with click.open_file(input_file, "r") as f:
             for line in f:
-                await queue.put(asyncio.create_task(process_line(qe_module, line)))
+                await queue.put(
+                    asyncio.create_task(
+                        process_line(
+                            qe_module,
+                            line,
+                            tokenizer,
+                            max_segment_tokens,
+                        )
+                    )
+                )
                 await asyncio.sleep(1e-6)
         await queue.put(None)  # Sentinel to indicate end of file
 

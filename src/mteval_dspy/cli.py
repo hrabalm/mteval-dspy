@@ -295,10 +295,24 @@ def train_da(
     type=click.Path(exists=True, dir_okay=False, allow_dash=True),
     default="-",
 )
+@click.option(
+    "--tokenizer",
+    type=str,
+    default="google/gemma-3-27b-it",
+    help="Tokenizer to use for optional truncation of src and tgt tokens in the input. Name or path to a Hugging Face tokenizer.",
+)
+@click.option(
+    "--max-segment-tokens",
+    type=int,
+    default=None,
+    help="If set, truncate src and tgt segments to this many tokens after tokenization.",
+)
 def predict_da(
     input_file,
     architecture,
     trained_model,
+    tokenizer,
+    max_segment_tokens,
 ):
     import asyncio
     import sys
@@ -318,6 +332,8 @@ def predict_da(
             qe_module=qe_module,
             input_file=input_file,
             outfp=real_stdout,
+            tokenizer=tokenizer,
+            max_segment_tokens=max_segment_tokens,
         )
 
     asyncio.run(main())
