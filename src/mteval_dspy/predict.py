@@ -1,15 +1,19 @@
 import asyncio
-import json
+from functools import partial
 
 import click
 import tenacity
 
-import mteval_dspy.truncation
 import mteval_dspy.runner
-from functools import partial
+import mteval_dspy.truncation
+
 
 async def process_line(
-    qe_module, example, tokenizer: str, max_segment_tokens: int | None
+    example,
+    qe_module,
+    tokenizer: str,
+    max_segment_tokens: int | None,
+    **kwargs,
 ):
     data = example
     if "src" in data:

@@ -54,6 +54,12 @@ class Runner:
                     result = await self.fn(*args, **kwargs)
                     self._progress.update(task_progress_processor, advance=1)
                     return result
+                except Exception as e:
+                    print(
+                        f"Warning: Error during processing: {e}, using empty result.",
+                        file=sys.stderr,
+                    )
+                    return []
                 finally:
                     self.concurreny_semaphore.release()
 
