@@ -5,11 +5,13 @@ import click
 import tenacity
 
 import mteval_dspy.truncation
+import mteval_dspy.runner
+from functools import partial
 
-
-async def process_line(qe_module, line, tokenizer: str, max_segment_tokens: int | None):
-    data = json.loads(line)
-
+async def process_line(
+    qe_module, example, tokenizer: str, max_segment_tokens: int | None
+):
+    data = example
     if "src" in data:
         data["src"] = await mteval_dspy.truncation.truncate_segment_async(
             data["src"], tokenizer, max_segment_tokens
@@ -46,7 +48,7 @@ async def process_line(qe_module, line, tokenizer: str, max_segment_tokens: int 
         **data,
         "score": prediction.score,
     }
-    return output
+    return [output]
 
 
 async def process_file(
@@ -55,36 +57,17 @@ async def process_file(
     outfp,
     tokenizer: str,
     max_segment_tokens: int | None,
+    max_concurrent: int,
 ):
-    queue = asyncio.Queue(maxsize=2_000)
-
-    async def producer():
-        with click.open_file(input_file, "r") as f:
-            for line in f:
-                await queue.put(
-                    asyncio.create_task(
-                        process_line(
-                            qe_module,
-                            line,
-                            tokenizer,
-                            max_segment_tokens,
-                        )
-                    )
-                )
-                await asyncio.sleep(1e-6)
-        await queue.put(None)  # Sentinel to indicate end of file
-
-    async def write_worker():
-        while True:
-            output_item = await queue.get()
-            try:
-                if output_item is None:
-                    break
-                output = await output_item
-                print(json.dumps(output, ensure_ascii=False), file=outfp)
-                await asyncio.sleep(1e-6)
-            finally:
-                queue.task_done()
-
-    tasks = [asyncio.create_task(producer()), asyncio.create_task(write_worker())]
-    await asyncio.gather(*tasks)
+    runner = mteval_dspy.runner.Runner(
+        partial(
+            process_line,
+            qe_module=qe_module,
+            tokenizer=tokenizer,
+            max_segment_tokens=max_segment_tokens,
+        ),
+        write_queue_size=10_000,
+        max_concurrent=max_concurrent,
+    )
+    with click.open_file(input_file, "r") as fp:
+        await runner.run(fp=fp, out_fp=outfp)

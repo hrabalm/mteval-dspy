@@ -74,7 +74,15 @@ def parse_optimizer_compile_params(params_str: str) -> dict:
     show_default=True,
     help="Enable or disable SSL certificate verification for HTTP clients.",
 )
+@click.option(
+    "--http-timeout",
+    type=float,
+    default=6000.0,
+    show_default=True,
+)
+@click.pass_context
 def cli(
+    ctx,
     model,
     api_base,
     api_key,
@@ -83,7 +91,9 @@ def cli(
     max_concurrent,
     sampling_params,
     enable_ssl_verify,
+    http_timeout,
 ):
+    ctx.ensure_object(dict)
     import dspy
 
     sampling_params = json.loads(sampling_params)
@@ -106,17 +116,19 @@ def cli(
     # https://docs.litellm.ai/docs/providers/openai#set-ssl_verifyfalse
     litellm.client_session = httpx.Client(
         verify=enable_ssl_verify,
-        timeout=6000.0,
+        timeout=http_timeout,
         limits=httpx.Limits(max_connections=max_concurrent),
     )
     litellm.aclient_session = httpx.AsyncClient(
         verify=enable_ssl_verify,
-        timeout=6000.0,
+        timeout=http_timeout,
         limits=httpx.Limits(max_connections=max_concurrent),
     )
+    ctx["MAX_CONCURRENT"] = max_concurrent
 
 
 @cli.command()
+@click.pass_context
 @click.option(
     "--training-data",
     type=click.Path(exists=True, dir_okay=False),
@@ -219,6 +231,7 @@ def cli(
     help="Optional path to a previously optimized program to load before continuing training.",
 )
 def train_da(
+    ctx,
     training_data,
     training_data_max_examples,
     validation_data,
@@ -307,7 +320,9 @@ def train_da(
     default=None,
     help="If set, truncate src and tgt segments to this many tokens after tokenization.",
 )
+@click.pass_context
 def predict_da(
+    ctx,
     input_file,
     architecture,
     trained_model,
@@ -334,6 +349,7 @@ def predict_da(
             outfp=real_stdout,
             tokenizer=tokenizer,
             max_segment_tokens=max_segment_tokens,
+            max_concurrent=ctx["MAX_CONCURRENT"],
         )
 
     asyncio.run(main())
