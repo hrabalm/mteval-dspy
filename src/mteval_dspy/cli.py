@@ -124,7 +124,7 @@ def cli(
         timeout=http_timeout,
         limits=httpx.Limits(max_connections=max_concurrent),
     )
-    ctx["MAX_CONCURRENT"] = max_concurrent
+    ctx.obj["MAX_CONCURRENT"] = max_concurrent
 
 
 @cli.command()
@@ -349,7 +349,7 @@ def predict_da(
             outfp=real_stdout,
             tokenizer=tokenizer,
             max_segment_tokens=max_segment_tokens,
-            max_concurrent=ctx["MAX_CONCURRENT"],
+            max_concurrent=ctx.obj["MAX_CONCURRENT"],
         )
 
     asyncio.run(main())
