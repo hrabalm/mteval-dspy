@@ -48,8 +48,8 @@ class ExtendedModule(dspy.Module):
             state["output_fields"] = list(self.output_fields)
         return state
 
-    def load_state(self, state):
-        super().load_state(state)
+    def load_state(self, state, *args, **kwargs):
+        super().load_state(state, *args, **kwargs)
         if "config" in state and hasattr(self, "config"):
             self.config = state["config"]
         if "input_fields" in state and hasattr(self, "input_fields"):
